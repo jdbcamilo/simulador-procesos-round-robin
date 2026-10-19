@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Simulador de Gestión de Procesos - Algoritmo Round Robin - Universidad de Córdoba">
+    <title>SYSTEM — Simulador de Gestión de Procesos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- ============ HEADER ============ -->
+    <header class="main-header">
+        <div class="header-content">
+            <div class="logo-section">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 40 40" fill="none">
+                        <circle cx="20" cy="20" r="18" stroke="url(#grad1)" stroke-width="2.5"/>
+                        <circle cx="20" cy="20" r="12" stroke="url(#grad1)" stroke-width="1.5" stroke-dasharray="4 3"/>
+                        <circle cx="20" cy="20" r="5" fill="url(#grad1)"/>
+                        <circle cx="20" cy="8" r="3" fill="#00f5d4"/>
+                        <circle cx="30" cy="25" r="3" fill="#7b61ff"/>
+                        <circle cx="10" cy="25" r="3" fill="#ec4899"/>
+                        <defs>
+                            <linearGradient id="grad1" x1="0" y1="0" x2="40" y2="40">
+                                <stop offset="0%" stop-color="#00f5d4"/>
+                                <stop offset="50%" stop-color="#7b61ff"/>
+                                <stop offset="100%" stop-color="#ec4899"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="logo-text">SYSTEM</h1>
+                    <p class="logo-subtitle">Simulador de Gestión de Procesos (Round Robin) — Universidad de Córdoba</p>
+                </div>
+            </div>
+
+            <!-- Navegación por pestañas -->
+            <nav class="header-nav">
+                <button class="nav-btn active" data-tab="simulador" id="nav-simulador">
+                    <span>⚡</span> Simulador
+                </button>
+                <button class="nav-btn" data-tab="reportes" id="nav-reportes">
+                    <span>📊</span> Reportes & Métricas
+                </button>
+                <button class="nav-btn" data-tab="xml" id="nav-xml">
+                    <span>🌐</span> Visor REST XML
+                </button>
+                <button class="nav-btn" data-tab="catalogos" id="nav-catalogos">
+                    <span>📋</span> Catálogos BD
+                </button>
+                <a href="/api/catalogos/xml" target="_blank" class="nav-btn nav-btn-accent">
+                    <span>↗</span> XML Puro
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- ============ MAIN CONTENT ============ -->
+    <main class="main-content">
+
+        <!-- ==================== TAB 1: SIMULADOR (VISTA PRINCIPAL) ==================== -->
+        <section class="tab-content active" id="tab-simulador">
+            
+            <!-- Barra Superior de Control del Simulador -->
+            <div class="sim-top-bar">
+                <!-- Selector de Catálogo con Auto-sincronización -->
+                <div>
+                    <label for="sim-catalogo" style="display:block; font-size:0.82rem; font-weight:700; color:#ffffff; margin-bottom:0.3rem;">
+                        Catálogo de Procesos a Simular:
+                    </label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <select id="sim-catalogo" class="input-field">
+                            <option value="">Cargando catálogos desde el servidor...</option>
+                        </select>
+                        <button class="btn btn-secondary btn-sm" id="btn-sync-catalogos" title="Sincronizar con el Escritorio">
+                            🔄 Sincronizar
+                        </button>
+                    </div>
+                    <div class="sync-badge">
+                        <span class="sync-dot"></span>
+                        <span id="sync-status-text">Sincronizado en tiempo real con la App de Escritorio</span>
+                    </div>
+                </div>
+
+                <!-- Parámetro Quantum (TH) -->
+                <div>
+                    <label for="sim-quantum" style="display:block; font-size:0.82rem; font-weight:700; color:#ffffff; margin-bottom:0.3rem;">
+                        Quantum (TH en ms):
+                    </label>
+                    <input type="number" id="sim-quantum" value="100" min="10" step="10" class="input-field">
+                    <small style="color:var(--text-muted); font-size:0.72rem;">TR = TH × Caracteres</small>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div>
+                    <label style="display:block; font-size:0.82rem; font-weight:700; color:#ffffff; margin-bottom:0.3rem;">
+                        Control de Simulación:
+                    </label>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" id="btn-iniciar-sim" style="flex:1;">
+                            <span>▶</span> Iniciar
+                        </button>
+                        <button class="btn btn-warning" id="btn-pausar-sim" disabled style="flex:1;">
+                            <span>⏸</span> Pausar
+                        </button>
+                        <button class="btn btn-danger" id="btn-detener-sim" disabled style="flex:1;">
+                            <span>⏹</span> Detener
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modelo de Estados (4 Zonas Visuales) -->
+            <div class="states-grid">
+                <!-- 1. LISTOS -->
+                <div class="state-column col-listo">
+                    <div class="state-header">
+                        <div class="state-title">
+                            <span>●</span> Listos
+                        </div>
+                        <span class="state-count-badge" id="count-listos">0</span>
+                    </div>
+                    <div class="state-queue" id="queue-listo"></div>
+                </div>
+
+                <!-- 2. EJECUCIÓN (CPU) -->
+                <div class="state-column col-ejec">
+                    <div class="state-header">
+                        <div class="state-title">
+                            <span style="animation: pulseDot 1s infinite;">⚡</span> Ejecución (CPU)
+                        </div>
+                        <span class="state-count-badge" id="count-ejecucion">0</span>
+                    </div>
+                    <div class="state-queue" id="queue-ejecucion"></div>
+                </div>
+
+                <!-- 3. ESPERA -->
+                <div class="state-column col-espera">
+                    <div class="state-header">
+                        <div class="state-title">
+                            <span>⏳</span> Espera
+                        </div>
+                        <span class="state-count-badge" id="count-espera">0</span>
+                    </div>
+                    <div class="state-queue" id="queue-espera"></div>
+                </div>
+
+                <!-- 4. TERMINADO -->
+                <div class="state-column col-term">
+                    <div class="state-header">
+                        <div class="state-title">
+                            <span>✔</span> Terminado
+                        </div>
+                        <span class="state-count-badge" id="count-terminado">0</span>
+                    </div>
+                    <div class="state-queue" id="queue-terminado"></div>
+                </div>
+            </div>
+
+            <!-- Diagrama de Gantt en Tiempo Real -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>📈 Diagrama de Gantt (Comportamiento de Ejecución en CPU)</h3>
+                    <span id="gantt-status" style="font-size:0.8rem; color:var(--text-muted);">En vivo</span>
+                </div>
+                <div class="card-body gantt-chart-wrapper" id="gantt-container">
+                    <div style="text-align:center; padding:2rem; color:var(--text-muted);">
+                        El gráfico de Gantt se generará dinámicamente al iniciar la simulación.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Métricas Clave de Rendimiento -->
+            <div class="stats-container">
+                <div class="stat-card-new">
+                    <div class="stat-new-label">Total Procesos</div>
+                    <div class="stat-new-value" id="stat-total-procesos">0</div>
+                </div>
+                <div class="stat-card-new">
+                    <div class="stat-new-label">T. Medio Espera</div>
+                    <div class="stat-new-value" id="stat-avg-espera">0 <span class="stat-new-unit">ms</span></div>
+                </div>
+                <div class="stat-card-new">
+                    <div class="stat-new-label">T. Medio Turnaround</div>
+                    <div class="stat-new-value" id="stat-avg-turnaround">0 <span class="stat-new-unit">ms</span></div>
+                </div>
+                <div class="stat-card-new">
+                    <div class="stat-new-label">Throughput</div>
+                    <div class="stat-new-value" id="stat-throughput">0 <span class="stat-new-unit">p/s</span></div>
+                </div>
+                <div class="stat-card-new">
+                    <div class="stat-new-label">Uso de CPU</div>
+                    <div class="stat-new-value" id="stat-cpu-util">0 <span class="stat-new-unit">%</span></div>
+                </div>
+                <div class="stat-card-new">
+                    <div class="stat-new-label">Reloj Total</div>
+                    <div class="stat-new-value" id="stat-total-time">0 <span class="stat-new-unit">ms</span></div>
+                </div>
+            </div>
+
+            <!-- Log de Eventos del Simulador -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>🖥️ Consola de Eventos del Simulador</h3>
+                    <div id="sim-time" style="font-family:var(--font-mono); font-weight:700; color:#38bdf8;">0 ms</div>
+                </div>
+                <div class="card-body">
+                    <div class="sim-log" id="sim-log">
+                        [0ms] Sistema listo. Selecciona un catálogo e inicia la simulación.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 2: REPORTES Y MÉTRICAS ==================== -->
+        <section class="tab-content" id="tab-reportes">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">Reportes de Planificación Round Robin</h2>
+                    <p class="section-desc">Métricas calculadas: Tiempo de Llegada (T.L), Ráfaga (R), Prioridad (P.R), TurnAround (T.R) y Tiempo de Finalización (T.F)</p>
+                </div>
+            </div>
+
+            <!-- Gráfica Proceso vs TurnAround -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>📊 Gráfico de Comportamiento: Proceso vs TurnaRound (T.R)</h3>
+                </div>
+                <div class="card-body" style="background:#090d16;">
+                    <canvas id="turnaroundChart" style="max-height: 360px;"></canvas>
+                </div>
+            </div>
+
+            <!-- Tabla 1: Listado de Ejecución General -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>📋 Listado de Ejecución General</h3>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="tabla-reporte-ejecucion">
+                        <thead>
+                            <tr>
+                                <th>P (Nombre)</th>
+                                <th>T.L (Llegada)</th>
+                                <th>R (Ráfaga)</th>
+                                <th>P.R (Prioridad)</th>
+                                <th>T.R (TurnaRound)</th>
+                                <th>T.F (Finalización)</th>
+                                <th># Ejecuciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reporte-ejecucion-body">
+                            <tr>
+                                <td colspan="7" style="text-align:center; color:var(--text-muted); padding:2rem;">
+                                    Inicia una simulación para generar el reporte de ejecución.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tabla 2: Listado de Procesos No Expulsivos -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>🔒 Listado de Procesos No Expulsivos (Sistema Operativo)</h3>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="tabla-reporte-no-expulsivos">
+                        <thead>
+                            <tr>
+                                <th>P (Nombre)</th>
+                                <th>T.L (Llegada)</th>
+                                <th>R (Ráfaga)</th>
+                                <th>P.R (Prioridad)</th>
+                                <th>T.R (TurnaRound)</th>
+                                <th>T.F (Finalización)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reporte-no-expulsivos-body">
+                            <tr>
+                                <td colspan="6" style="text-align:center; color:var(--text-muted); padding:2rem;">
+                                    Inicia una simulación para filtrar los procesos no expulsivos.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 3: VISOR REST XML EN VIVO ==================== -->
+        <section class="tab-content" id="tab-xml">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">Web Service REST (XML)</h2>
+                    <p class="section-desc">Visualiza y valida en tiempo real la salida XML que expone el Backend para la integración</p>
+                </div>
+                <div style="display:flex; gap:0.6rem;">
+                    <button class="btn btn-primary btn-sm" id="btn-cargar-xml-visor">
+                        🔄 Actualizar XML
+                    </button>
+                    <button class="btn btn-secondary btn-sm" id="btn-copiar-xml">
+                        📋 Copiar XML
+                    </button>
+                    <a href="/api/catalogos/xml" target="_blank" class="btn btn-secondary btn-sm">
+                        ↗ Abrir en Nueva Pestaña
+                    </a>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>📄 Respuesta XML desde endpoint: <code>GET /api/catalogos/xml</code></h3>
+                    <span id="xml-load-status" style="font-size:0.8rem; color:#10b981;">● Activo</span>
+                </div>
+                <div class="card-body">
+                    <pre class="xml-container" id="xml-code-viewer">Cargando XML...</pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 4: CATÁLOGOS EN BD ==================== -->
+        <section class="tab-content" id="tab-catalogos">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">Catálogos Almacenados en Base de Datos (H2)</h2>
+                    <p class="section-desc">Consulta los catálogos y procesos guardados desde la App de Escritorio o desde la Web</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="btn-refresh-catalogos">
+                    🔄 Actualizar Lista
+                </button>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>Listado de Catálogos</h3>
+                </div>
+                <div class="card-body">
+                    <div class="catalogos-list" id="catalogos-list">
+                        <!-- Items cargados dinámicamente -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detalle de procesos del catálogo seleccionado -->
+            <div class="card hidden" id="catalogo-detalle">
+                <div class="card-header">
+                    <h3 id="detalle-titulo">Procesos del Catálogo</h3>
+                    <button class="btn btn-secondary btn-sm" id="btn-cerrar-detalle">Cerrar</button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="tabla-procesos">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Nombre</th>
+                                <th>Usuario</th>
+                                <th>Descripción</th>
+                                <th>Prioridad</th>
+                                <th>CPU %</th>
+                                <th>Memoria (MB)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-procesos-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
