@@ -1,5 +1,5 @@
 # 🖥️ Simulador de Gestión de Procesos — Planificación Round Robin
-### Sistema Híbrido: Aplicación de Escritorio (Generador & Catálogos) + Web Service REST (XML) + Simulador Web Interactivo
+### Sistema Híbrido: Aplicación de Escritorio (Generador & Catálogos) + Web Service REST (XML) + Simulador Web Interactivo 
 
 <div align="center">
 
