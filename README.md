@@ -33,7 +33,6 @@
 - [Requisitos Previos](#-requisitos-previos)
 - [Instalación y Puesta en Marcha](#-instalación-y-puesta-en-marcha)
 - [Documentación del Servicio Web (XML)](#-documentación-del-servicio-web-xml)
-- [Documentos Académicos Complementarios](#-documentos-académicos-complementarios)
 - [Créditos y Licencia](#-créditos-y-licencia)
 
 ---
@@ -331,13 +330,6 @@ Este script:
 ```
 
 ---
-
-## 📚 Documentos Académicos Complementarios
-
-En la raíz del proyecto encontrarás dos documentos elaborados para la sustentación y entrega de la asignatura:
-
-- 📋 [GUIA_SUSTENTACION.md](file:///c:/Users/Lenovo/Desktop/U/SEMESTRE%207/S.O/Similador%20de%20procesos/simulador-procesos/GUIA_SUSTENTACION.md): Libreto paso a paso para la exposición oral de 20 minutos ante el docente, con respuestas preparadas a las preguntas técnicas más difíciles.
-- 📄 [INFORME_TECNICO.md](file:///c:/Users/Lenovo/Desktop/U/SEMESTRE%207/S.O/Similador%20de%20procesos/simulador-procesos/INFORME_TECNICO.md): Informe formal en formato artículo científico/técnico con marco conceptual, diagramas de arquitectura, tablas de pruebas, análisis de casos y referencias bibliográficas normalizadas (Silberschatz, Tanenbaum, Stallings).
 
 ---
 
