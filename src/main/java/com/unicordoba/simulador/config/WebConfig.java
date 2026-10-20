@@ -37,7 +37,8 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/**")
+        // Excluimos /h2-console/** para que el servlet de H2 lo maneje directamente
+        registry.addResourceHandler("/static/**", "/*.html", "/*.css", "/*.js", "/*.ico", "/*.png", "/*.jpg", "/*.svg")
                 .addResourceLocations("classpath:/static/");
     }
 }

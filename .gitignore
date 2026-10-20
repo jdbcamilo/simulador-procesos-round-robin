@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Dynamic process simulation output
+process-output/

@@ -5,8 +5,12 @@ let isSimulating = false;
 let isPaused = false;
 let worker = null;
 let simTime = 0;
-let quantumTH = 100;
+let thUnidad   = 10;   // TH: Unidad de tiempo base (ms) — base para calcular ráfagas
+let numQuantums = 3;   // Q: Número de quantums por turno (entero). Tiempo turno = Q × TH ms
+let tiempoTurno = 30;  // = Q × TH (calculado al iniciar)
 let tickAcumuladoParaQuantum = 0;
+let simSpeed = 1;        // Factor de velocidad: 0.5, 1, 2, 4
+const BASE_TICK_MS = 80; // Intervalo base del worker en ms (a velocidad 1×)
 
 let procesosSimulacion = [];
 let procesosListos = [];
@@ -36,6 +40,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-sync-catalogos').addEventListener('click', () => {
         loadCatalogos(true);
         showToast('Catálogos sincronizados con el escritorio', 'info');
+    });
+
+    // Botones de velocidad de simulación
+    document.querySelectorAll('.speed-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const speed = parseFloat(btn.dataset.speed);
+            setSimSpeed(speed);
+        });
     });
 
     // Visor XML
@@ -215,10 +227,30 @@ window.eliminarCatalogo = async function(id) {
     }
 };
 
+// ==================== CONTROL DE VELOCIDAD ====================
+function setSimSpeed(speed) {
+    simSpeed = speed;
+    const labels = { 0.5: '0.5× (Lenta)', 1: '1× (Normal)', 2: '2× (Rápida)', 4: '4× (Muy Rápida)' };
+    document.getElementById('speed-label').textContent = labels[speed] || speed + '×';
+
+    // Marcar botón activo
+    document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.speed-btn[data-speed="${speed}"]`)?.classList.add('active');
+
+    // Si ya está simulando, actualizar el worker con nuevo intervalo
+    if (isSimulating && !isPaused && worker) {
+        const newInterval = Math.round(BASE_TICK_MS / speed);
+        worker.postMessage({ type: 'SET_SPEED', interval: newInterval });
+        showToast(`Velocidad cambiada a ${labels[speed] || speed + '×'}`, 'info');
+    }
+}
+
 // ==================== SIMULADOR ROUND ROBIN ====================
 async function handleIniciarSim() {
     const catalogoId = document.getElementById('sim-catalogo').value;
-    quantumTH = parseInt(document.getElementById('sim-quantum').value) || 100;
+    thUnidad    = parseInt(document.getElementById('sim-th').value)      || 10;
+    numQuantums = parseInt(document.getElementById('sim-quantum').value) || 3;
+    tiempoTurno = numQuantums * thUnidad;  // Tiempo real de CPU por turno en ms
 
     if (!catalogoId) {
         showToast('Por favor selecciona un catálogo para simular', 'error');
@@ -286,10 +318,11 @@ function iniciarSimulacion(procesos) {
 
     document.getElementById('sim-log').innerHTML = '';
     document.getElementById('gantt-container').innerHTML = '';
-    logSim(`⚡ Iniciando Simulación Round Robin con Quantum (TH) = ${quantumTH} ms`);
+    logSim(`⚡ Round Robin | TH = ${thUnidad} ms | Q = ${numQuantums} quantums | Turno = ${tiempoTurno} ms (Q × TH)`);
     updateSimControls(true, false);
 
-    // Preparar cola de listos con cálculo de tiempos de llegada y ráfaga
+    // Ráfaga total = TH × |descripción| ms
+    // Cada turno en CPU dura Q × TH ms, luego el proceso expulsivo vuelve a la cola
     let tlAccum = 0;
     procesosListos = procesos.map((p, index) => {
         let descLen = p.descripcion ? p.descripcion.length : 12;
@@ -298,7 +331,7 @@ function iniciarSimulacion(procesos) {
         const tl = index === 0 ? 0 : tlAccum + 1;
         tlAccum = tl;
 
-        const rafagaTotal = quantumTH * descLen;
+        const rafagaTotal = thUnidad * descLen;  // usa TH, no Q
 
         return {
             id: p.id,
@@ -323,19 +356,26 @@ function iniciarSimulacion(procesos) {
     const workerCode = `
         let isPaused = false;
         let timer = null;
+        let currentInterval = ${Math.round(BASE_TICK_MS / simSpeed)};
 
         self.onmessage = function(e) {
             if (e.data.type === 'START') {
                 isPaused = false;
                 timer = setInterval(() => {
-                    if (!isPaused) {
-                        self.postMessage({ type: 'TICK' });
-                    }
-                }, 80); 
+                    if (!isPaused) self.postMessage({ type: 'TICK' });
+                }, currentInterval);
             } else if (e.data.type === 'PAUSE') {
                 isPaused = true;
             } else if (e.data.type === 'RESUME') {
                 isPaused = false;
+            } else if (e.data.type === 'SET_SPEED') {
+                currentInterval = e.data.interval;
+                clearInterval(timer);
+                if (!isPaused) {
+                    timer = setInterval(() => {
+                        if (!isPaused) self.postMessage({ type: 'TICK' });
+                    }, currentInterval);
+                }
             } else if (e.data.type === 'STOP') {
                 clearInterval(timer);
                 self.close();
@@ -352,7 +392,7 @@ function iniciarSimulacion(procesos) {
 function handleWorkerTick(e) {
     if (e.data.type !== 'TICK') return;
 
-    const avance = Math.max(1, quantumTH / 10);
+    const avance = Math.max(1, thUnidad / 5);  // avance proporcional a TH
     simTime += avance;
     document.getElementById('sim-time').textContent = Math.floor(simTime) + ' ms';
     document.getElementById('stat-total-time').textContent = Math.floor(simTime) + ' ms';
@@ -412,9 +452,9 @@ function handleWorkerTick(e) {
             return;
         }
 
-        // Caso b: Proceso expulsivo agota su quantum TH
-        if (procesoEnEjecucion.prioridad === 0 && tickAcumuladoParaQuantum >= quantumTH) {
-            logSim(`[EXPULSIÓN] ${procesoEnEjecucion.nombre} agotó quantum (${quantumTH}ms) -> Vuelve a LISTOS.`);
+        // Caso b: Proceso expulsivo agota su turno (Q × TH ms)
+        if (procesoEnEjecucion.prioridad === 0 && tickAcumuladoParaQuantum >= tiempoTurno) {
+            logSim(`[EXPULSIÓN] ${procesoEnEjecucion.nombre} agotó ${numQuantums} quantums (${tiempoTurno}ms) → vuelve a LISTOS.`);
             procesosListos.push(procesoEnEjecucion);
 
             if (currentGanttBlock) {
@@ -428,8 +468,8 @@ function handleWorkerTick(e) {
             tickAcumuladoParaQuantum = 0;
             renderQueues();
         } else if (procesoEnEjecucion.prioridad === 1) {
-            // Caso No Expulsivo (SO): No sale de CPU por quantum, pero cuenta cada bloque ejecutado
-            if (tickAcumuladoParaQuantum >= quantumTH) {
+            // No Expulsivo (SO): no sale por quantum, pero contamos bloques
+            if (tickAcumuladoParaQuantum >= tiempoTurno) {
                 tickAcumuladoParaQuantum = 0;
                 procesoEnEjecucion.ejecuciones++;
                 renderQueues();
@@ -528,7 +568,8 @@ function createProcBoxHtml(p, state) {
         ? `<span class="badge badge-no-exp">1 • No Expulsivo (SO)</span>`
         : `<span class="badge badge-exp">0 • Expulsivo</span>`;
 
-    const quantumRestante = Math.max(0, Math.ceil(p.rafagaRestante / quantumTH));
+    // Turnos restantes = cuántos turnos de (Q×TH ms) le faltan al proceso
+    const turnosRestantes = tiempoTurno > 0 ? Math.max(0, Math.ceil(p.rafagaRestante / tiempoTurno)) : '?';
     const progresoPct = p.rafaga > 0 ? Math.min(100, Math.round(((p.rafaga - p.rafagaRestante) / p.rafaga) * 100)) : 100;
 
     let actionButton = '';
@@ -550,7 +591,7 @@ function createProcBoxHtml(p, state) {
             </div>
 
             <div class="proc-metrics">
-                <div class="metric-item">Quantum: <strong>${quantumRestante}</strong></div>
+                <div class="metric-item">Turnos Q: <strong>${turnosRestantes}</strong></div>
                 <div class="metric-item">Ejecs: <strong>${p.ejecuciones}</strong></div>
                 <div class="metric-item">Ráfaga: <strong>${Math.floor(p.rafagaRestante)}ms</strong></div>
                 <div class="metric-item">Progreso: <strong>${progresoPct}%</strong></div>
@@ -804,4 +845,220 @@ function showToast(message, type = 'info') {
         toast.style.transform = 'translateY(10px)';
         setTimeout(() => toast.remove(), 300);
     }, 3500);
+}
+
+// ==================== EXPORTACIÓN PDF Y CSV ====================
+
+/**
+ * Obtiene la fuente de datos para exportar.
+ * Prioriza reporte[], pero si está vacío (simulación detenida antes de terminar)
+ * usa procesosTerminados[].
+ */
+function getExportData() {
+    // Si hay datos en reporte, usarlos
+    const fuente = reporte.length > 0 ? reporte : procesosTerminados;
+    return fuente.map(p => {
+        const tf = Math.floor(p.tiempoFinalizacion || (quantumTH * p.ejecuciones));
+        const tr = Math.max(p.rafaga, tf - (p.tiempoLlegada || 0));
+        const te = Math.max(0, tr - p.rafaga);
+        const prioridadLabel = p.prioridad === 1 ? '1 - No Expulsivo (SO)' : '0 - Expulsivo';
+        return {
+            nombre: p.nombre || '?',
+            pid: p.pid || 0,
+            tl: p.tiempoLlegada || 0,
+            rafaga: Math.floor(p.rafaga || 0),
+            prioridad: prioridadLabel,
+            tr: Math.floor(tr),
+            tf: Math.floor(tf),
+            te: Math.floor(te),
+            ejecuciones: p.ejecuciones || 0
+        };
+    });
+}
+
+/**
+ * Exporta el reporte de simulación a CSV (separador ; compatible con Excel ES).
+ */
+function exportarCSV() {
+    const rows = getExportData();
+
+    if (rows.length === 0) {
+        alert('⚠️ No hay datos para exportar. Ejecuta una simulación primero y espera a que al menos un proceso termine.');
+        return;
+    }
+
+    try {
+        const n = rows.length;
+        const totalTR = rows.reduce((acc, r) => acc + r.tr, 0);
+        const totalTE = rows.reduce((acc, r) => acc + r.te, 0);
+
+        const csvLines = [];
+        csvLines.push('SISTEMA SYSTEM - Reporte Round Robin');
+        csvLines.push(`Quantum (TH);${quantumTH} ms`);
+        csvLines.push(`Tiempo Total Simulacion;${Math.floor(simTime)} ms`);
+        csvLines.push(`Total Procesos;${n}`);
+        csvLines.push(`T.R Promedio;${n > 0 ? Math.floor(totalTR / n) : 0} ms`);
+        csvLines.push(`T.E Promedio;${n > 0 ? Math.floor(totalTE / n) : 0} ms`);
+        csvLines.push('');
+        csvLines.push(['P (Nombre)', 'PID', 'T.L (Llegada ms)', 'R (Rafaga ms)', 'P.R (Prioridad)', 'T.R (TurnaRound ms)', 'T.F (Finalizacion ms)', 'T.E (Espera ms)', '# Ejecuciones'].join(';'));
+
+        rows.forEach(r => {
+            csvLines.push([r.nombre, r.pid, r.tl, r.rafaga, r.prioridad, r.tr, r.tf, r.te, r.ejecuciones].join(';'));
+        });
+
+        const noExp = rows.filter(r => r.prioridad.startsWith('1'));
+        if (noExp.length > 0) {
+            csvLines.push('');
+            csvLines.push('--- Procesos No Expulsivos (Sistema Operativo) ---');
+            csvLines.push(['P (Nombre)', 'PID', 'T.L (ms)', 'R (ms)', 'P.R', 'T.R (ms)', 'T.F (ms)'].join(';'));
+            noExp.forEach(r => csvLines.push([r.nombre, r.pid, r.tl, r.rafaga, r.prioridad, r.tr, r.tf].join(';')));
+        }
+
+        // BOM UTF-8 para que Excel en español abra bien los tildes/ñ
+        const bom = '\uFEFF';
+        const blob = new Blob([bom + csvLines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+
+        // IMPORTANTE: el link debe estar en el DOM para que Chrome lo ejecute
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `reporte_round_robin_${Date.now()}.csv`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        showToast('✅ CSV descargado correctamente', 'success');
+    } catch (err) {
+        console.error('Error exportando CSV:', err);
+        alert('Error al exportar CSV: ' + err.message);
+    }
+}
+
+/**
+ * Exporta el reporte de simulación a PDF usando jsPDF + autoTable.
+ */
+function exportarPDF() {
+    const rows = getExportData();
+
+    if (rows.length === 0) {
+        alert('⚠️ No hay datos para exportar. Ejecuta una simulación primero y espera a que al menos un proceso termine.');
+        return;
+    }
+
+    // Detectar jsPDF independientemente del modo de carga del CDN
+    let jsPDFClass = null;
+    if (window.jspdf && window.jspdf.jsPDF) {
+        jsPDFClass = window.jspdf.jsPDF;
+    } else if (window.jsPDF) {
+        jsPDFClass = window.jsPDF;
+    }
+
+    if (!jsPDFClass) {
+        alert('⚠️ La librería jsPDF no se cargó. Verifica tu conexión a internet y recarga la página (Ctrl+Shift+R).');
+        return;
+    }
+
+    try {
+        const doc = new jsPDFClass({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+        const n = rows.length;
+        const totalTR = rows.reduce((acc, r) => acc + r.tr, 0);
+        const totalTE = rows.reduce((acc, r) => acc + r.te, 0);
+        const avgTR = n > 0 ? Math.floor(totalTR / n) : 0;
+        const avgTE = n > 0 ? Math.floor(totalTE / n) : 0;
+        const thVal = simTime > 0 && n > 0 ? (n / (simTime / 1000)).toFixed(2) : '0.00';
+
+        // Fondo oscuro
+        doc.setFillColor(9, 13, 22);
+        doc.rect(0, 0, 300, 220, 'F');
+
+        // Barra de título azul
+        doc.setFillColor(37, 99, 235);
+        doc.rect(0, 0, 300, 22, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(15);
+        doc.setFont('helvetica', 'bold');
+        doc.text('SYSTEM - Reporte de Planificacion Round Robin', 14, 14);
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        const fecha = new Date().toLocaleString('es-CO');
+        doc.text('Generado: ' + fecha + '   |   Universidad de Cordoba', 14, 20);
+
+        // Métricas resumen
+        doc.setTextColor(180, 210, 255);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Metricas Globales', 14, 32);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(140, 180, 255);
+
+        const met1 = 'Quantum (TH): ' + quantumTH + ' ms   |   Total Procesos: ' + n + '   |   Tiempo Total: ' + Math.floor(simTime) + ' ms';
+        const met2 = 'T.R Promedio: ' + avgTR + ' ms   |   T.E Promedio: ' + avgTE + ' ms   |   Throughput: ' + thVal + ' proc/s';
+        doc.text(met1, 14, 38);
+        doc.text(met2, 14, 44);
+
+        // Tabla principal
+        doc.setTextColor(160, 220, 255);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Listado de Ejecucion General', 14, 52);
+
+        const tableHead = [['Proceso', 'PID', 'T.L(ms)', 'R(ms)', 'Prioridad', 'T.R(ms)', 'T.F(ms)', 'T.E(ms)', '#Ejecs']];
+        const tableBody = rows.map(r => [r.nombre, String(r.pid), String(r.tl), String(r.rafaga), r.prioridad, String(r.tr), String(r.tf), String(r.te), String(r.ejecuciones)]);
+
+        doc.autoTable({
+            head: tableHead,
+            body: tableBody,
+            startY: 56,
+            theme: 'grid',
+            styles: { fontSize: 7.5, cellPadding: 2, textColor: [220, 235, 255], fillColor: [15, 23, 42], lineColor: [37, 99, 235], lineWidth: 0.2 },
+            headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+            alternateRowStyles: { fillColor: [22, 33, 58] },
+            columnStyles: { 0: { cellWidth: 38 }, 4: { cellWidth: 36 } }
+        });
+
+        // Tabla No Expulsivos
+        const noExp = rows.filter(r => r.prioridad.startsWith('1'));
+        if (noExp.length > 0) {
+            const nextY = doc.lastAutoTable.finalY + 8;
+            doc.setTextColor(251, 191, 36);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Procesos No Expulsivos (Sistema Operativo)', 14, nextY);
+
+            const noExpHead = [['Proceso', 'PID', 'T.L(ms)', 'R(ms)', 'Prioridad', 'T.R(ms)', 'T.F(ms)']];
+            const noExpBody = noExp.map(r => [r.nombre, String(r.pid), String(r.tl), String(r.rafaga), r.prioridad, String(r.tr), String(r.tf)]);
+
+            doc.autoTable({
+                head: noExpHead,
+                body: noExpBody,
+                startY: nextY + 4,
+                theme: 'grid',
+                styles: { fontSize: 7.5, cellPadding: 2, textColor: [255, 235, 180], fillColor: [30, 20, 10], lineColor: [217, 119, 6], lineWidth: 0.2 },
+                headStyles: { fillColor: [146, 64, 14], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+                alternateRowStyles: { fillColor: [40, 28, 10] }
+            });
+        }
+
+        // Pie de página
+        const totalPages = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            doc.setFontSize(7);
+            doc.setTextColor(80, 110, 160);
+            doc.text('Pagina ' + i + ' de ' + totalPages + '  |  SYSTEM Simulador Round Robin  |  Universidad de Cordoba', 14, 207);
+        }
+
+        doc.save('reporte_round_robin_' + Date.now() + '.pdf');
+        showToast('✅ PDF descargado correctamente', 'success');
+    } catch (err) {
+        console.error('Error exportando PDF:', err);
+        alert('Error al generar el PDF: ' + err.message);
+    }
+
 }

@@ -185,6 +185,7 @@ body {
     align-items: center;
     flex-wrap: wrap;
     gap: 1rem;
+    min-height: 3rem;
 }
 
 .section-title {
@@ -828,4 +829,53 @@ body {
     .states-grid { grid-template-columns: 1fr; }
     .stats-container { grid-template-columns: repeat(2, 1fr); }
     .header-content { flex-direction: column; align-items: flex-start; }
+}
+
+/* ==================== BOTONES DE VELOCIDAD ==================== */
+.speed-btn-group {
+    display: flex;
+    gap: 0.35rem;
+    margin-bottom: 0.3rem;
+}
+
+.speed-btn {
+    padding: 0.35rem 0.8rem;
+    border-radius: 8px;
+    border: 1.5px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    letter-spacing: 0.03em;
+}
+
+.speed-btn:hover {
+    border-color: rgba(123, 97, 255, 0.5);
+    background: rgba(123, 97, 255, 0.12);
+    color: #c4b5fd;
+    transform: translateY(-1px);
+}
+
+.speed-btn.active {
+    border-color: #7b61ff;
+    background: linear-gradient(135deg, rgba(123, 97, 255, 0.25), rgba(123, 97, 255, 0.1));
+    color: #c4b5fd;
+    box-shadow: 0 0 12px rgba(123, 97, 255, 0.3);
+}
+
+.speed-btn[data-speed="4"].active {
+    border-color: #f59e0b;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(245, 158, 11, 0.1));
+    color: #fcd34d;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.3);
+}
+
+.speed-btn[data-speed="0.5"].active {
+    border-color: #06b6d4;
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(6, 182, 212, 0.1));
+    color: #67e8f9;
+    box-shadow: 0 0 12px rgba(6, 182, 212, 0.3);
 }

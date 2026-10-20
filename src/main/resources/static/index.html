@@ -86,13 +86,36 @@
                     </div>
                 </div>
 
-                <!-- Parámetro Quantum (TH) -->
+                <!-- Parámetros TH y Quantum (separados y claros) -->
+                <div style="display:flex; gap:1rem; align-items:flex-start;">
+                    <div>
+                        <label for="sim-th" style="display:block; font-size:0.82rem; font-weight:700; color:#00f5d4; margin-bottom:0.3rem;">
+                            TH — Unidad de Tiempo (ms):
+                        </label>
+                        <input type="number" id="sim-th" value="10" min="1" max="500" step="1" class="input-field" style="width:100px;">
+                        <small style="color:var(--text-muted); font-size:0.72rem;">Ráfaga = TH × |desc|</small>
+                    </div>
+                    <div>
+                        <label for="sim-quantum" style="display:block; font-size:0.82rem; font-weight:700; color:#7b61ff; margin-bottom:0.3rem;">
+                            Q — Número de Quantums por turno:
+                        </label>
+                        <input type="number" id="sim-quantum" value="3" min="1" max="100" step="1" class="input-field" style="width:120px;">
+                        <small style="color:var(--text-muted); font-size:0.72rem;">Turno = Q × TH ms</small>
+                    </div>
+                </div>
+
+                <!-- Velocidad de Simulación -->
                 <div>
-                    <label for="sim-quantum" style="display:block; font-size:0.82rem; font-weight:700; color:#ffffff; margin-bottom:0.3rem;">
-                        Quantum (TH en ms):
+                    <label style="display:block; font-size:0.82rem; font-weight:700; color:#ffffff; margin-bottom:0.3rem;">
+                        🚀 Velocidad de Simulación:
                     </label>
-                    <input type="number" id="sim-quantum" value="100" min="10" step="10" class="input-field">
-                    <small style="color:var(--text-muted); font-size:0.72rem;">TR = TH × Caracteres</small>
+                    <div class="speed-btn-group" id="speed-controls">
+                        <button class="speed-btn" id="speed-05x" data-speed="0.5" title="Velocidad lenta">0.5×</button>
+                        <button class="speed-btn active" id="speed-1x" data-speed="1" title="Velocidad normal">1×</button>
+                        <button class="speed-btn" id="speed-2x" data-speed="2" title="Velocidad rápida">2×</button>
+                        <button class="speed-btn" id="speed-4x" data-speed="4" title="Velocidad muy rápida">4×</button>
+                    </div>
+                    <small style="color:var(--text-muted); font-size:0.72rem;">Velocidad actual: <span id="speed-label">1× (Normal)</span></small>
                 </div>
 
                 <!-- Botones de Acción -->
@@ -222,6 +245,14 @@
                 <div>
                     <h2 class="section-title">Reportes de Planificación Round Robin</h2>
                     <p class="section-desc">Métricas calculadas: Tiempo de Llegada (T.L), Ráfaga (R), Prioridad (P.R), TurnAround (T.R) y Tiempo de Finalización (T.F)</p>
+                </div>
+                <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+                    <button class="btn btn-secondary btn-sm" id="btn-exportar-csv" onclick="exportarCSV()">
+                        📥 Exportar CSV
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="btn-exportar-pdf" onclick="exportarPDF()">
+                        📄 Exportar PDF
+                    </button>
                 </div>
             </div>
 
@@ -379,6 +410,8 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
