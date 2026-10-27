@@ -275,7 +275,7 @@ async function handleIniciarSim() {
         }
 
         // Ejecutar los hilos reales en el backend para crear los archivos físicos de texto
-        fetch(`${API_URL}/catalogos/${catalogoId}/ejecutar-actividad?th=${quantumTH}`, { method: 'POST' })
+        fetch(`${API_URL}/catalogos/${catalogoId}/ejecutar-actividad?th=${thUnidad}`, { method: 'POST' })
             .then(r => r.json())
             .then(data => {
                 logSim(`[HILOS JAVA] Hilos independientes iniciados en backend (${data.directorio})`);
@@ -284,6 +284,7 @@ async function handleIniciarSim() {
 
         iniciarSimulacion(procesosSimulacion);
     } catch (e) {
+        console.error('Error al iniciar la simulación:', e);
         showToast('Error al obtener procesos del catálogo', 'error');
     }
 }
