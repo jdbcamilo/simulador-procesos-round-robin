@@ -8,6 +8,7 @@ let simTime = 0;
 let thUnidad   = 10;   // TH: Unidad de tiempo base (ms) — base para calcular ráfagas
 let numQuantums = 3;   // Q: Número de quantums por turno (entero). Tiempo turno = Q × TH ms
 let tiempoTurno = 30;  // = Q × TH (calculado al iniciar)
+let quantumTH   = 30;  // Alias de tiempoTurno / TH para compatibilidad
 let tickAcumuladoParaQuantum = 0;
 let simSpeed = 1;        // Factor de velocidad: 0.5, 1, 2, 4
 const BASE_TICK_MS = 80; // Intervalo base del worker en ms (a velocidad 1×)
@@ -251,6 +252,7 @@ async function handleIniciarSim() {
     thUnidad    = parseInt(document.getElementById('sim-th').value)      || 10;
     numQuantums = parseInt(document.getElementById('sim-quantum').value) || 3;
     tiempoTurno = numQuantums * thUnidad;  // Tiempo real de CPU por turno en ms
+    quantumTH   = tiempoTurno;
 
     if (!catalogoId) {
         showToast('Por favor selecciona un catálogo para simular', 'error');
@@ -682,7 +684,7 @@ function generarReportes() {
     const chartData = [];
 
     reporte.forEach(p => {
-        const tf = Math.floor(p.tiempoFinalizacion || (quantumTH * p.ejecuciones));
+        const tf = Math.floor(p.tiempoFinalizacion || (tiempoTurno * (p.ejecuciones || 1)));
         const tr = Math.max(p.rafaga, tf - p.tiempoLlegada);
         const te = Math.max(0, tr - p.rafaga);
 
@@ -859,7 +861,7 @@ function getExportData() {
     // Si hay datos en reporte, usarlos
     const fuente = reporte.length > 0 ? reporte : procesosTerminados;
     return fuente.map(p => {
-        const tf = Math.floor(p.tiempoFinalizacion || (quantumTH * p.ejecuciones));
+        const tf = Math.floor(p.tiempoFinalizacion || (tiempoTurno * (p.ejecuciones || 1)));
         const tr = Math.max(p.rafaga, tf - (p.tiempoLlegada || 0));
         const te = Math.max(0, tr - p.rafaga);
         const prioridadLabel = p.prioridad === 1 ? '1 - No Expulsivo (SO)' : '0 - Expulsivo';
@@ -895,7 +897,9 @@ function exportarCSV() {
 
         const csvLines = [];
         csvLines.push('SISTEMA SYSTEM - Reporte Round Robin');
-        csvLines.push(`Quantum (TH);${quantumTH} ms`);
+        csvLines.push(`Quantum (Q);${numQuantums}`);
+        csvLines.push(`Tiempo Base TH;${thUnidad} ms`);
+        csvLines.push(`Tiempo Turno (Q x TH);${tiempoTurno} ms`);
         csvLines.push(`Tiempo Total Simulacion;${Math.floor(simTime)} ms`);
         csvLines.push(`Total Procesos;${n}`);
         csvLines.push(`T.R Promedio;${n > 0 ? Math.floor(totalTR / n) : 0} ms`);
@@ -998,7 +1002,7 @@ function exportarPDF() {
         doc.setFontSize(8.5);
         doc.setTextColor(140, 180, 255);
 
-        const met1 = 'Quantum (TH): ' + quantumTH + ' ms   |   Total Procesos: ' + n + '   |   Tiempo Total: ' + Math.floor(simTime) + ' ms';
+        const met1 = 'Quantum (Q): ' + numQuantums + '   |   TH: ' + thUnidad + ' ms   |   Turno (Q×TH): ' + tiempoTurno + ' ms   |   Total Procesos: ' + n;
         const met2 = 'T.R Promedio: ' + avgTR + ' ms   |   T.E Promedio: ' + avgTE + ' ms   |   Throughput: ' + thVal + ' proc/s';
         doc.text(met1, 14, 38);
         doc.text(met2, 14, 44);
